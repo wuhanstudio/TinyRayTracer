@@ -15,6 +15,9 @@
 
 #define CHANNEL_NUM 3
 
+int envmap_width, envmap_height;
+std::vector<Vec3f> envmap;
+
 struct Light {
     Light(const Vec3f& p, const float& i) : position(p), intensity(i) {}
     Vec3f position;
@@ -99,7 +102,9 @@ Vec3f cast_ray(const Vec3f& orig, const Vec3f& dir, const std::vector<Sphere>& s
     Material material;
 
     if (depth > 4 || !scene_intersect(orig, dir, spheres, point, N, material)) {
-        return Vec3f(0.2, 0.7, 0.8); // background color
+        int a = std::max(0, std::min(envmap_width - 1, static_cast<int>((atan2(dir.z, dir.x) / (2 * M_PI) + .5) * envmap_width)));  // TODO understand why
+        int b = std::max(0, std::min(envmap_height - 1, static_cast<int>(acos(dir.y) / M_PI * envmap_height)));                     // TODO understand why
+        return envmap[a + b * envmap_width]; // background image color
     }
 
     Vec3f reflect_dir = reflect(dir, N).normalize();
@@ -163,6 +168,20 @@ void render(const std::vector<Sphere>& spheres, const std::vector<Light>& lights
 }
 
 int main() {
+    int n = -1;
+    unsigned char* pixmap = stbi_load("envmap.jpg", &envmap_width, &envmap_height, &n, 0);
+    if (!pixmap || 3 != n) {
+        std::cerr << "Error: can not load the environment map" << std::endl;
+        return -1;
+    }
+    envmap = std::vector<Vec3f>(envmap_width * envmap_height);
+    for (int j = envmap_height - 1; j >= 0; j--) {
+        for (int i = 0; i < envmap_width; i++) {
+            envmap[i + j * envmap_width] = Vec3f(pixmap[(i + j * envmap_width) * 3 + 0], pixmap[(i + j * envmap_width) * 3 + 1], pixmap[(i + j * envmap_width) * 3 + 2]) * (1 / 255.);
+        }
+    }
+    stbi_image_free(pixmap);
+
     Material      ivory(1.0, Vec4f(0.6, 0.3, 0.1, 0.0), Vec3f(0.4, 0.4, 0.3), 50.);
     Material      glass(1.5, Vec4f(0.0, 0.5, 0.1, 0.8), Vec3f(0.6, 0.7, 0.8), 125.);
     Material red_rubber(1.0, Vec4f(0.9, 0.1, 0.0, 0.0), Vec3f(0.3, 0.1, 0.1), 10.);
